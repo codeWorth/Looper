@@ -2434,6 +2434,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\Source\CopyLoop.h" />
+    <ClInclude Include="..\..\Source\Listeners.h" />
     <ClInclude Include="..\..\Source\Loop.h" />
     <ClInclude Include="..\..\Source\PluginProcessor.h" />
     <ClInclude Include="..\..\Source\PluginEditor.h" />

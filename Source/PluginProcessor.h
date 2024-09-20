@@ -13,13 +13,12 @@
 
 constexpr int nLoops = 6;
 constexpr int loopLenInBeats = 8;
+constexpr float minLoopDb = -30.f;
 
 //==============================================================================
 /**
 */
-class LooperAudioProcessor :
-    public juce::AudioProcessor,
-    public juce::AudioProcessorParameter::Listener
+class LooperAudioProcessor : public juce::AudioProcessor 
 {
 public:
     //==============================================================================
@@ -59,19 +58,19 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
-    void parameterValueChanged(int parameterIndex, float newValue) override;
-    void parameterGestureChanged(int parameterIndex, bool gestureIsStarting) override;
     juce::AudioProcessorValueTreeState valueTree;
 
     int recordingIndex = -1;
 
 private:
     juce::AudioProcessorValueTreeState::ParameterLayout createParameters();
+    void setupParameterListeners();
     void setupTempBuffers(int len);
     void readWriteLoops(Loop<float> loops[], CopyLoop<float>& tempLoop, size_t currentSample, const float* readBuffer, float* outBuffer);
     void setupLoops(size_t samplesPerBeat);
     
     bool loopDown[nLoops];
+    float loopVolumes[nLoops];
 
     size_t samplesPerBeat = 0;
     Loop<float> loopsL[nLoops];
@@ -83,6 +82,8 @@ private:
 
     CopyLoop<float> nextLoopL;
     CopyLoop<float> nextLoopR;
+
+    std::vector<std::unique_ptr<juce::AudioProcessorParameter::Listener>> listeners;
 
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LooperAudioProcessor)

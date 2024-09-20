@@ -8,6 +8,7 @@
 
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "Listeners.h"
 #include <cstring>
 
 //==============================================================================
@@ -27,6 +28,13 @@ LooperAudioProcessor::LooperAudioProcessor()
     nSamples = 1024;
     tempBuffer1 = new float[nSamples];
     tempBuffer2 = new float[nSamples];
+
+    for (int i = 0; i < nLoops; i++) {
+        loopDown[i] = false;
+        loopVolumes[i] = 1.f;
+    }
+
+    setupParameterListeners();
 }
 
 LooperAudioProcessor::~LooperAudioProcessor() {
@@ -184,8 +192,11 @@ void LooperAudioProcessor::readWriteLoops(Loop<float> loops[], CopyLoop<float>& 
             loops[j].readBuffer(tempBuffer2, currentSample, nSamples);
         }
 
+        float loopVal = loopVolumes[j];
+        float decibles = (loopVal - 1) * -minLoopDb;
+        float gain = juce::Decibels::decibelsToGain(decibles, minLoopDb);
         for (int i = 0; i < nSamples; i++) {
-            outBuffer[i] += tempBuffer2[i];
+            outBuffer[i] += gain * tempBuffer2[i];
         }
     }    
 }
@@ -232,27 +243,26 @@ juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() {
 juce::AudioProcessorValueTreeState::ParameterLayout LooperAudioProcessor::createParameters() {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
 
-    params.push_back(std::make_unique<juce::AudioParameterBool>("LOOP1", "Loop1", false));
-    params.back().get()->addListener(this);
-    params.push_back(std::make_unique<juce::AudioParameterBool>("LOOP2", "Loop2", false));
-    params.back().get()->addListener(this);
-    params.push_back(std::make_unique<juce::AudioParameterBool>("LOOP3", "Loop3", false));
-    params.back().get()->addListener(this);
-    params.push_back(std::make_unique<juce::AudioParameterBool>("LOOP4", "Loop4", false));
-    params.back().get()->addListener(this);
-    params.push_back(std::make_unique<juce::AudioParameterBool>("LOOP5", "Loop5", false));
-    params.back().get()->addListener(this);
-    params.push_back(std::make_unique<juce::AudioParameterBool>("LOOP6", "Loop6", false));
-    params.back().get()->addListener(this);
+    for (int i = 0; i < nLoops; i++) {
+        const juce::String number(i + 1);
 
-    params.push_back(std::make_unique<juce::AudioParameterFloat>("VOLUME1", "Volume1", -100.f, 0.f, 0.f));
-    params.push_back(std::make_unique<juce::AudioParameterFloat>("VOLUME2", "Volume2", -100.f, 0.f, 0.f));
-    params.push_back(std::make_unique<juce::AudioParameterFloat>("VOLUME3", "Volume3", -100.f, 0.f, 0.f));
-    params.push_back(std::make_unique<juce::AudioParameterFloat>("VOLUME4", "Volume4", -100.f, 0.f, 0.f));
-    params.push_back(std::make_unique<juce::AudioParameterFloat>("VOLUME5", "Volume5", -100.f, 0.f, 0.f));
-    params.push_back(std::make_unique<juce::AudioParameterFloat>("VOLUME6", "Volume6", -100.f, 0.f, 0.f));
+        params.push_back(std::make_unique<juce::AudioParameterBool>("LOOP" + number, "Loop" + number, false));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>("VOLUME" + number, "Volume" + number, minLoopDb, 0.f, 0.f));
+    }
 
     return { params.begin(), params.end() };
+}
+
+void LooperAudioProcessor::setupParameterListeners() {
+    for (int i = 0; i < nLoops; i++) {
+        const juce::String number(i + 1);
+
+        listeners.push_back(std::make_unique<ButtonListener>(loopDown[i]));
+        valueTree.getParameter("LOOP" + number)->addListener(listeners.back().get());
+
+        listeners.push_back(std::make_unique<VolumeListener>(loopVolumes[i]));
+        valueTree.getParameter("VOLUME" + number)->addListener(listeners.back().get());
+    }
 }
 
 void LooperAudioProcessor::setupTempBuffers(int len) {
@@ -264,9 +274,3 @@ void LooperAudioProcessor::setupTempBuffers(int len) {
     tempBuffer2 = new float[nSamples];
     std::fill_n(tempBuffer2, nSamples, 0.f);
 }
-
-void LooperAudioProcessor::parameterValueChanged(int parameterIndex, float newValue) {
-    loopDown[parameterIndex] = true;
-}
-
-void LooperAudioProcessor::parameterGestureChanged(int parameterIndex, bool gestureIsStarting) {}
