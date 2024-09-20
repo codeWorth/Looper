@@ -34,6 +34,7 @@ public:
    #endif
 
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    void doLooping(juce::AudioBuffer<float>& buffer, juce::Optional<juce::AudioPlayHead::PositionInfo> info);
 
     //==============================================================================
     juce::AudioProcessorEditor* createEditor() override;

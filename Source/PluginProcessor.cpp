@@ -138,7 +138,6 @@ void LooperAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
 
     auto playhead = getPlayHead();
     if (playhead == nullptr) {
-        buffer.clear();
         return;
     }
 
@@ -147,13 +146,16 @@ void LooperAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     playing = info->getIsPlaying();
 
     if (!playing) {
-        buffer.clear();
         for (int i = 0; i < nLoops; i++) loopDown[i] = false;
         recordingIndex = -1;
         beat = -1;
         return;
     }
 
+    doLooping(buffer, info);
+}
+
+void LooperAudioProcessor::doLooping(juce::AudioBuffer<float>& buffer, juce::Optional<juce::AudioPlayHead::PositionInfo> info) {
     auto bpm = info->getBpm().orFallback(120);
     auto sampleRate = getSampleRate();
     size_t samplesPerBeat = ceil(sampleRate * 60.0 / bpm);
@@ -164,7 +166,7 @@ void LooperAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     for (int i = 0; i < nLoops; i++) {
         if (!loopDown[i]) continue;
         loopDown[i] = false;
-        
+
         if (recordingIndex == i) {
             recordingIndex = -1;
         } else {
@@ -185,11 +187,12 @@ void LooperAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
 }
 
 void LooperAudioProcessor::readWriteLoops(Loop<float> loops[], CopyLoop<float>& tempLoop, size_t currentSample, const float* readBuffer, float* outBuffer) {
-    std::fill_n(outBuffer, nSamples, 0.f);
+    std::memcpy(outBuffer, readBuffer, nSamples * sizeof(float));
+    
     for (int j = 0; j < nLoops; j++) {
         if (recordingIndex == j) {
             tempLoop.writeBuffer(readBuffer, currentSample, nSamples);
-            std::memcpy(tempBuffer2, readBuffer, sizeof(float) * nSamples);
+            
         } else {
             loops[j].readBuffer(tempBuffer2, currentSample, nSamples);
         }

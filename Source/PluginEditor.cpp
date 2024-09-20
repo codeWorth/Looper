@@ -25,7 +25,7 @@ LooperAudioProcessorEditor::LooperAudioProcessorEditor (LooperAudioProcessor& p)
 
     startTimerHz(30);
 
-    setSize((nLoops-1)*120 + 100 + 40, 500);
+    setSize((nLoops-1)*120 + 100 + 40, 410);
 }
 
 LooperAudioProcessorEditor::~LooperAudioProcessorEditor() {
@@ -45,7 +45,7 @@ void LooperAudioProcessorEditor::resized() {
 
     int indSize = (getWidth() - 40) / loopLenInBeats;
     for (int i = 0; i < loopLenInBeats; i++) {
-        beatIndicators[i].setBounds(20 + indSize * i, 350, indSize - 4, indSize - 4);
+        beatIndicators[i].setBounds(20 + indSize * i, 310, indSize - 4, 80);
     }
 }
 
