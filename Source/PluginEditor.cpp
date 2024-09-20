@@ -17,9 +17,15 @@ LooperAudioProcessorEditor::LooperAudioProcessorEditor (LooperAudioProcessor& p)
         setupSlider(volumeSliders[i], volumeSliderAttachments[i], juce::String(i + 1), labels[i]);
     }
 
+    for (int i = 0; i < loopLenInBeats; i++) {
+        beatIndicators[i].setText("", juce::dontSendNotification);
+        beatIndicators[i].setColour(juce::Label::outlineColourId, juce::Colours::whitesmoke);
+        addAndMakeVisible(beatIndicators[i]);
+    }
+
     startTimerHz(30);
 
-    setSize(800, 300);
+    setSize((nLoops-1)*120 + 100 + 40, 500);
 }
 
 LooperAudioProcessorEditor::~LooperAudioProcessorEditor() {
@@ -35,6 +41,11 @@ void LooperAudioProcessorEditor::resized() {
     for (int i = 0; i < nLoops; i++) {
         volumeSliders[i].setBounds(20 + 120 * i, 70, 100, 200);
         labels[i].setBounds(40 + 120 * i, 20, 60, 40);
+    }
+
+    int indSize = (getWidth() - 40) / loopLenInBeats;
+    for (int i = 0; i < loopLenInBeats; i++) {
+        beatIndicators[i].setBounds(20 + indSize * i, 350, indSize - 4, indSize - 4);
     }
 }
 
@@ -60,6 +71,11 @@ void LooperAudioProcessorEditor::setupSlider(
 }
 
 void LooperAudioProcessorEditor::timerCallback() {
+    drawRecording();
+    drawBeat();
+}
+
+void LooperAudioProcessorEditor::drawRecording() {
     if (prevRecording == audioProcessor.recordingIndex) return;
 
     if (audioProcessor.recordingIndex == -1) {
@@ -72,5 +88,19 @@ void LooperAudioProcessorEditor::timerCallback() {
     }
 
     prevRecording = audioProcessor.recordingIndex;
+}
 
+void LooperAudioProcessorEditor::drawBeat() {
+    if (prevBeat == audioProcessor.beat) return;
+
+    if (audioProcessor.beat == -1) {
+        for (int i = 0; i < loopLenInBeats; i++) {
+            beatIndicators[i].setColour(juce::Label::backgroundColourId, juce::Colours::transparentBlack);
+        }
+    } else {
+        if (prevBeat != -1) beatIndicators[prevBeat].setColour(juce::Label::backgroundColourId, juce::Colours::transparentBlack);
+        beatIndicators[audioProcessor.beat].setColour(juce::Label::backgroundColourId, juce::Colours::whitesmoke);
+    }
+
+    prevBeat = audioProcessor.beat;
 }

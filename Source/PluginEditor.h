@@ -38,13 +38,19 @@ private:
         juce::Label& label
     );
 
+    void drawRecording();
+    void drawBeat();
+
     LooperAudioProcessor& audioProcessor;
 
     juce::Label labels[nLoops];
     DecibelSlider volumeSliders[nLoops];
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> volumeSliderAttachments[nLoops];
 
+    juce::Label beatIndicators[loopLenInBeats];
+
     int prevRecording = -1;
+    int prevBeat = -1;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LooperAudioProcessorEditor)
 };

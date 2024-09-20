@@ -61,6 +61,7 @@ public:
     juce::AudioProcessorValueTreeState valueTree;
 
     int recordingIndex = -1;
+    int beat = -1;
 
 private:
     juce::AudioProcessorValueTreeState::ParameterLayout createParameters();

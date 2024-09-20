@@ -150,6 +150,7 @@ void LooperAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
         buffer.clear();
         for (int i = 0; i < nLoops; i++) loopDown[i] = false;
         recordingIndex = -1;
+        beat = -1;
         return;
     }
 
@@ -174,6 +175,7 @@ void LooperAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     }
 
     auto samples = info->getTimeInSamples().orFallback(0);
+    beat = (samples / samplesPerBeat) % loopLenInBeats;
 
     readWriteLoops(loopsL, nextLoopL, samples, buffer.getReadPointer(0), tempBuffer1);
     std::memcpy(buffer.getWritePointer(0), tempBuffer1, nSamples * sizeof(float));
