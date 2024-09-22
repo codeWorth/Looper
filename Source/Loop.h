@@ -4,13 +4,18 @@
 #include <cstring>
 #include <algorithm>
 
+constexpr int FADE_SAMPLES = 200;
+
 template<typename T>
 class Loop {
 public:
-	Loop<T>() : data(nullptr), size(0), samplesPerBeat(0), beatsPerLoop(0) {}
+	Loop<T>() : data(nullptr), size(0), samplesPerBeat(0), beatsPerLoop(0) {
+		preLoop = new T[FADE_SAMPLES];
+	}
 
 	~Loop<T>() {
 		delete[] data;
+		delete[] preLoop;
 	}
 
 	T& operator[](size_t x) {
@@ -42,31 +47,24 @@ public:
 		if (bufferSize > samplesToEnd) {
 			readAll(dest + samplesToEnd, 0, bufferSize - samplesToEnd);
 		}
-	}
 
-	/*
-	* Based on current position of the playhead, copy the given buffer to the corresponding position in the loop.
-	* @param buffer Buffer of values to copy.
-	* @param currentSample Location of the playhead in samples.
-	* @param bufferSize Number of values to copy.
-	*/
-	virtual void writeBuffer(const T* buffer, size_t currentSample, int bufferSize) {
-		assert(bufferSize <= size);
-		size_t loopSample = getLoopSample(currentSample, bufferSize);
+		auto fadeStart = size - FADE_SAMPLES;
+		if (loopSample + bufferSize <= fadeStart) return;
 
-		// copy to the end of loop from buffer
-		size_t samplesToEnd = size - loopSample;
-		if (samplesToEnd > bufferSize) samplesToEnd = bufferSize;
-		copyAll(buffer, loopSample, samplesToEnd);
+		size_t start = std::max(fadeStart, loopSample);
+		int count = std::min(bufferSize, (int)(size - start));
 
-		// copy remaining to start of loop if needed
-		if (bufferSize > samplesToEnd) {
-			copyAll(buffer + samplesToEnd, 0, bufferSize - samplesToEnd);
+		for (size_t i = start; i < start + count; i++) {
+			size_t fadeIndex = i - fadeStart;
+			size_t destIndex = i - loopSample;
+			float fadePercent = ((float)fadeIndex) / FADE_SAMPLES;
+			dest[destIndex] = dest[destIndex] * (1 - fadePercent) + preLoop[fadeIndex] * fadePercent;
 		}
 	}
 
 	void fill(T value) {
 		std::fill_n(data, size, value);
+		std::fill_n(preLoop, FADE_SAMPLES, value);
 	}
 
 	size_t getSize() const {
@@ -98,10 +96,18 @@ protected:
 	* @param count Number of values to copy.
 	*/
 	void copyAll(const T* elements, size_t index, size_t count) {
-		assert(index + count <= size);
+		assert(index + count <= getSize());
 		assert(index >= 0);
 
 		std::memcpy(data + index, elements, sizeof(T) * count);
+	}
+
+	/*
+	* Copies the end of the the loop into the pre loop buffer for crossfade purposes.
+	*/
+	void copyPreLoop() {
+		auto fadeStart = size - FADE_SAMPLES;
+		std::memcpy(preLoop, data + fadeStart, sizeof(T) * FADE_SAMPLES);
 	}
 
 	size_t getLoopSample(size_t currentSample, int bufferSize) const {
@@ -109,16 +115,18 @@ protected:
 		double loopsFromStart = floor(currentBeat / beatsPerLoop);
 		size_t loopStartInSamples = floor(loopsFromStart * beatsPerLoop * samplesPerBeat);
 		return currentSample - loopStartInSamples;	// time within loop in sample units. 
-		// If currentSample is at the start of the loop, this value will be 0.
+													// If currentSample is at the start of the loop, this value will be 0.
 	}
 
 	void swapData(Loop<T>& other) {
 		assert(size == other.size);
 		std::swap(data, other.data);
+		std::swap(preLoop, other.preLoop);
 	}
 
 private:
 	T* data;
+	T* preLoop;
 	size_t size;
 	double samplesPerBeat;
 	int beatsPerLoop;

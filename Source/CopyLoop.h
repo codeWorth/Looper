@@ -13,7 +13,7 @@ public:
 	* @param currentSample Location of the playhead in samples.
 	* @param bufferSize Number of values to copy.
 	*/
-	void writeBuffer(const T* buffer, size_t currentSample, int bufferSize) override {
+	void writeBuffer(const T* buffer, size_t currentSample, int bufferSize) {
 		assert(bufferSize <= getSize());
 		size_t loopSample = getLoopSample(currentSample, bufferSize);
 
@@ -27,6 +27,8 @@ public:
 			} else {
 				startedCopy = true;
 			}
+
+			copyPreLoop();
 		}
 
 		// copy remaining to start of loop if needed
