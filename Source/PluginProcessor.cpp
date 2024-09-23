@@ -22,7 +22,8 @@ LooperAudioProcessor::LooperAudioProcessor()
                        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
                      #endif
                        ), 
-    valueTree(*this, nullptr, "Parameters", createParameters())
+    valueTree(*this, nullptr, "Parameters", createParameters()),
+    loopSyncer(this)
 #endif
 {
     nSamples = 1024;
@@ -168,9 +169,11 @@ void LooperAudioProcessor::doLooping(juce::AudioBuffer<float>& buffer, juce::Opt
         loopDown[i] = false;
 
         if (recordingIndex == i) {
+            loopSyncer.stopRecordLoop();
             recordingIndex = -1;
         } else {
             recordingIndex = i;
+            startRecordLoop(recordingIndex);
             nextLoopL.setupCopy(loopsL + recordingIndex);
             nextLoopR.setupCopy(loopsR + recordingIndex);
         }
@@ -245,6 +248,24 @@ juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() {
     return new LooperAudioProcessor();
 }
 
+void LooperAudioProcessor::startRecordLoop(int loopIndex) {
+    if (recordingIndex == loopIndex) return; // if we're already recording loopIndex, do nothing
+    loopDown[loopIndex] = true;
+}
+
+void LooperAudioProcessor::stopRecordLoop() {
+    if (recordingIndex == -1) return; // if we're not recording anything, do nothing
+    loopDown[recordingIndex] = true;
+}
+
+void LooperAudioProcessor::setLoopVolume(int loopIndex, float volume) {
+    loopVolumes[loopIndex] = volume;
+}
+
+bool LooperAudioProcessor::isServer() const {
+    return loopSyncer.getIsServer();
+}
+
 juce::AudioProcessorValueTreeState::ParameterLayout LooperAudioProcessor::createParameters() {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
 
@@ -265,7 +286,7 @@ void LooperAudioProcessor::setupParameterListeners() {
         listeners.push_back(std::make_unique<ButtonListener>(loopDown[i]));
         valueTree.getParameter("LOOP" + number)->addListener(listeners.back().get());
 
-        listeners.push_back(std::make_unique<VolumeListener>(loopVolumes[i]));
+        listeners.push_back(std::make_unique<VolumeListener>(loopVolumes[i], i, loopSyncer));
         valueTree.getParameter("VOLUME" + number)->addListener(listeners.back().get());
     }
 }

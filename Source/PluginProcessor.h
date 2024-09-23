@@ -10,6 +10,7 @@
 
 #include <JuceHeader.h>
 #include "CopyLoop.h"
+#include "LoopSyncer.h"
 
 constexpr int nLoops = 6;
 constexpr int loopLenInBeats = 8;
@@ -18,7 +19,9 @@ constexpr float minLoopDb = -30.f;
 //==============================================================================
 /**
 */
-class LooperAudioProcessor : public juce::AudioProcessor 
+class LooperAudioProcessor : 
+    public juce::AudioProcessor, 
+    public LoopSyncer::MessageListener
 {
 public:
     //==============================================================================
@@ -59,10 +62,15 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
+    void startRecordLoop(int loopIndex) override;
+    void stopRecordLoop() override;
+    void setLoopVolume(int loopIndex, float volume) override;
+
     juce::AudioProcessorValueTreeState valueTree;
 
     int recordingIndex = -1;
     int beat = -1;
+    bool isServer() const;
 
 private:
     juce::AudioProcessorValueTreeState::ParameterLayout createParameters();
@@ -86,6 +94,7 @@ private:
     CopyLoop<float> nextLoopR;
 
     std::vector<std::unique_ptr<juce::AudioProcessorParameter::Listener>> listeners;
+    LoopSyncer loopSyncer;
 
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LooperAudioProcessor)
