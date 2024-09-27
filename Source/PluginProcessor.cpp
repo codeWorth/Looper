@@ -8,7 +8,6 @@
 
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
-#include "Listeners.h"
 #include <cstring>
 
 //==============================================================================
@@ -146,6 +145,8 @@ void LooperAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     auto info = playhead->getPosition();
     playing = info->getIsPlaying();
 
+    loopSyncer.handleUpdates();
+
     if (!playing) {
         for (int i = 0; i < nLoops; i++) loopDown[i] = false;
         recordingIndex = -1;
@@ -169,11 +170,9 @@ void LooperAudioProcessor::doLooping(juce::AudioBuffer<float>& buffer, juce::Opt
         loopDown[i] = false;
 
         if (recordingIndex == i) {
-            loopSyncer.stopRecordLoop();
             recordingIndex = -1;
         } else {
             recordingIndex = i;
-            startRecordLoop(recordingIndex);
             nextLoopL.setupCopy(loopsL + recordingIndex);
             nextLoopR.setupCopy(loopsR + recordingIndex);
         }
@@ -260,10 +259,7 @@ void LooperAudioProcessor::stopRecordLoop() {
 
 void LooperAudioProcessor::setLoopVolume(int loopIndex, float volume) {
     loopVolumes[loopIndex] = volume;
-}
-
-bool LooperAudioProcessor::isServer() const {
-    return loopSyncer.getIsServer();
+    valueTree.getParameter("VOLUME" + juce::String(loopIndex + 1))->setValueNotifyingHost(volume);
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout LooperAudioProcessor::createParameters() {
@@ -283,10 +279,10 @@ void LooperAudioProcessor::setupParameterListeners() {
     for (int i = 0; i < nLoops; i++) {
         const juce::String number(i + 1);
 
-        listeners.push_back(std::make_unique<ButtonListener>(loopDown[i]));
+        listeners.push_back(std::make_unique<ButtonListener>(loopDown[i], i, *this));
         valueTree.getParameter("LOOP" + number)->addListener(listeners.back().get());
 
-        listeners.push_back(std::make_unique<VolumeListener>(loopVolumes[i], i, loopSyncer));
+        listeners.push_back(std::make_unique<VolumeListener>(loopVolumes[i], i, *this));
         valueTree.getParameter("VOLUME" + number)->addListener(listeners.back().get());
     }
 }

@@ -11,10 +11,7 @@
 #include <JuceHeader.h>
 #include "CopyLoop.h"
 #include "LoopSyncer.h"
-
-constexpr int nLoops = 6;
-constexpr int loopLenInBeats = 8;
-constexpr float minLoopDb = -30.f;
+#include "Constants.h"
 
 //==============================================================================
 /**
@@ -70,7 +67,6 @@ public:
 
     int recordingIndex = -1;
     int beat = -1;
-    bool isServer() const;
 
 private:
     juce::AudioProcessorValueTreeState::ParameterLayout createParameters();
@@ -95,6 +91,48 @@ private:
 
     std::vector<std::unique_ptr<juce::AudioProcessorParameter::Listener>> listeners;
     LoopSyncer loopSyncer;
+
+    struct ButtonListener : public juce::AudioProcessorParameter::Listener {
+
+        ButtonListener(bool& pressed, int loopIndex, LooperAudioProcessor& looper) :
+            pressed(pressed), loopIndex(loopIndex), looper(looper) {};
+        ~ButtonListener() {};
+
+        bool& pressed;
+        const int loopIndex;
+        LooperAudioProcessor& looper;
+
+        void parameterValueChanged(int parameterIndex, float newValue) override {
+            pressed = true;
+            if (looper.recordingIndex == loopIndex) {
+                looper.loopSyncer.broadcastStopRecord();
+            } else {
+                looper.loopSyncer.broadcastStartRecord(loopIndex);
+            }
+        }
+
+        void parameterGestureChanged(int parameterIndex, bool gestureIsStarting) override {}
+    };
+
+    struct VolumeListener : juce::AudioProcessorParameter::Listener {
+
+        VolumeListener(float& volume, int loopIndex, LooperAudioProcessor& looper) :
+            volume(volume), loopIndex(loopIndex), looper(looper) {};
+        ~VolumeListener() {};
+
+        float& volume;
+        const int loopIndex;
+        LooperAudioProcessor& looper;
+
+        void parameterValueChanged(int parameterIndex, float newValue) override {
+            if (volume == newValue) return; // prevent message from looping when updated via LoopSyncer call
+
+            volume = newValue;
+            looper.loopSyncer.broadcastLoopVolume(loopIndex, volume);
+        }
+
+        void parameterGestureChanged(int parameterIndex, bool gestureIsStarting) override {}
+    };
 
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LooperAudioProcessor)

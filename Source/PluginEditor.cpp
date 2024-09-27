@@ -23,9 +23,6 @@ LooperAudioProcessorEditor::LooperAudioProcessorEditor (LooperAudioProcessor& p)
         addAndMakeVisible(beatIndicators[i]);
     }
 
-    serverIndicator.setText("", juce::dontSendNotification);
-    addAndMakeVisible(serverIndicator);
-
     startTimerHz(30);
 
     setSize((nLoops-1)*120 + 100 + 40, 410);
@@ -50,8 +47,6 @@ void LooperAudioProcessorEditor::resized() {
     for (int i = 0; i < loopLenInBeats; i++) {
         beatIndicators[i].setBounds(20 + indSize * i, 310, indSize - 4, 80);
     }
-
-    serverIndicator.setBounds(getWidth() - 20, 0, 20, 20);
 }
 
 void LooperAudioProcessorEditor::setupSlider(
@@ -78,12 +73,6 @@ void LooperAudioProcessorEditor::setupSlider(
 void LooperAudioProcessorEditor::timerCallback() {
     drawRecording();
     drawBeat();
-    
-    if (audioProcessor.isServer()) {
-        serverIndicator.setText("S", juce::dontSendNotification);
-    } else {
-        serverIndicator.setText("", juce::dontSendNotification);
-    }
 }
 
 void LooperAudioProcessorEditor::drawRecording() {

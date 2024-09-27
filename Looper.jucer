@@ -2,7 +2,7 @@
 
 <JUCERPROJECT id="SgXm8H" name="Looper" projectType="audioplug" useAppConfig="0"
               addUsingNamespaceToJuceHeader="0" displaySplashScreen="1" jucerFormatVersion="1"
-              companyName="Pavlov">
+              companyName="Pavlov" headerPath="C:\Program Files\boost_1_82_0">
   <MAINGROUP id="Q4qpPX" name="Looper">
     <GROUP id="{7849679F-D8CA-C772-F4EA-0DD9EE947DDB}" name="Source">
       <FILE id="MdFmbX" name="PluginProcessor.cpp" compile="1" resource="0"

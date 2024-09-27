@@ -48,7 +48,6 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> volumeSliderAttachments[nLoops];
 
     juce::Label beatIndicators[loopLenInBeats];
-    juce::Label serverIndicator;
 
     int prevRecording = -1;
     int prevBeat = -1;

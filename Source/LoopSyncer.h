@@ -1,13 +1,45 @@
 #pragma once
 
-#include "JuceHeader.h"
-#include <vector>
-#include <stdexcept>
+#include "Constants.h"
+#include <utility>
+#include <functional>
 
-class LoopSyncer : 
-	public juce::InterprocessConnectionServer,
-	public juce::InterprocessConnection 
-{
+#include <boost/interprocess/shared_memory_object.hpp>
+#include <boost/interprocess/managed_shared_memory.hpp>
+#include <boost/interprocess/allocators/allocator.hpp>
+#include <boost/interprocess/containers/map.hpp>
+
+namespace bip = boost::interprocess;
+
+struct LooperUpdate {
+	LooperUpdate() {
+		std::fill_n(volume, nLoops, 1.f);
+	}
+
+	LooperUpdate(const LooperUpdate& u) :
+		startRecord(u.startRecord), stopRecord(u.stopRecord), hasUpdate(u.hasUpdate) 
+	{
+		for (int i = 0; i < nLoops; i++) {
+			volume[i] = u.volume[i];
+		}
+	}
+
+	float volume[nLoops];
+	int8_t startRecord = -1;
+	bool stopRecord = false;
+	bool hasUpdate = false;
+
+	void clear() {
+		startRecord = -1;
+		stopRecord = false;
+		hasUpdate = false;
+	}
+};
+typedef std::pair<void* const, LooperUpdate> SharedMapEntry;
+typedef bip::allocator<SharedMapEntry, bip::managed_shared_memory::segment_manager> SharedAllocator;
+typedef bip::map<void*, LooperUpdate, std::less<void*>, SharedAllocator> SharedMap;
+
+class LoopSyncer {
 public:
 
 	class MessageListener {
@@ -17,150 +49,77 @@ public:
 		virtual void setLoopVolume(int loopIndex, float volume) = 0;
 	};
 
-	LoopSyncer(MessageListener* listener) : listener(listener) {
-		if (!connectToSocket(SERVER_ADDRESS, SERVER_PORT, 50)) {
-			startServer();
+	LoopSyncer(MessageListener* listener) : listener(listener), shm(bip::open_or_create, MEM_NAME, 8192) {
+		using namespace boost::interprocess;
+
+		sharedMap = shm.find_or_construct<SharedMap>("SHARED_MAP")(SharedAllocator(shm.get_segment_manager()));
+		
+		if (sharedMap->size() > 0) {
+			auto existingState = LooperUpdate(sharedMap->begin()->second);
+			sharedMap->emplace(this, existingState);
+			sharedMap->at(this).hasUpdate = true;
+			handleUpdates();
+		} else {
+			sharedMap->emplace(this, LooperUpdate());
 		}
 	}
 
 	~LoopSyncer() {
-		if (isServer && clients.size() > 0) {
-			BecomeHostMessage message;
-			clients[0].get()->sendMessage(juce::MemoryBlock(&message, sizeof(BecomeHostMessage)));
-		}
+		sharedMap->erase(this);
 
-		stop();
-		disconnect();
-	}
-
-	void connectionMade() override {}
-
-	void connectionLost() override {
-		if (shouldBecomeServer) {
-			shouldBecomeServer = false;
-			startServer();
-		} else {
-			connectToSocket(SERVER_ADDRESS, SERVER_PORT, 100);
+		if (sharedMap->size() == 0) {
+			bip::shared_memory_object::remove(MEM_NAME);
 		}
 	}
 
-	void messageReceived(const juce::MemoryBlock& message) {
-		MessageType type = (MessageType) message[0];
+	void handleUpdates() {
+		LooperUpdate& entry = sharedMap->at(this);
+		if (!entry.hasUpdate) return;
 
-		switch (type) {
-		case LoopSyncer::BECOME_HOST:
-			shouldBecomeServer = true;
-			break;
+		for (int i = 0; i < nLoops; i++) {
+			listener->setLoopVolume(i, entry.volume[i]);
+		}
 
-		case LoopSyncer::START_RECORDING:
-			listener->startRecordLoop(((StartRecordMessage*)message.getData())->loopIndex);
-			break;
+		if (entry.startRecord != -1) {
+			listener->startRecordLoop(entry.startRecord);
+		}
 
-		case LoopSyncer::STOP_RECORDING:
+		if (entry.stopRecord) {
 			listener->stopRecordLoop();
-			break;
+		}
 
-		case LoopSyncer::SET_VOLUME:
-			listener->setLoopVolume(
-				((SetVolumeMessage*)message.getData())->loopIndex,
-				((SetVolumeMessage*)message.getData())->volume
-			);
-			break;
+		entry.clear();
+	}
 
-		default:
-			throw std::invalid_argument("Unknown message type received!");
+	void broadcastStartRecord(int loopIndex) {
+		for (auto& [key, entry] : *sharedMap) {
+			if (key == this) continue;
+
+			entry.startRecord = loopIndex;
+			entry.hasUpdate = true;
 		}
 	}
 
-	void startRecordLoop(int loopIndex) {
-		StartRecordMessage message(loopIndex);
-		broadcastMessage(juce::MemoryBlock(&message, sizeof(StartRecordMessage)));
-	}
+	void broadcastStopRecord() {
+		for (auto& [key, entry] : *sharedMap) {
+			if (key == this) continue;
 
-	void stopRecordLoop() {
-		StopRecordMessage message;
-		broadcastMessage(juce::MemoryBlock(&message, sizeof(StopRecordMessage)));
-	}
-
-	void setLoopVolume(int loopIndex, float volume) {
-		SetVolumeMessage message(loopIndex, volume);
-		broadcastMessage(juce::MemoryBlock(&message, sizeof(SetVolumeMessage)));
-	}
-
-	bool getIsServer() const {
-		return isServer;
-	}
-
-protected:
-	struct ServerConnection : juce::InterprocessConnection {
-		~ServerConnection() {
-			disconnect();
+			entry.stopRecord = true;
+			entry.hasUpdate = true;
 		}
+	}
 
-		void connectionMade() override {}
-
-		void connectionLost() override {}
-
-		void messageReceived(const juce::MemoryBlock& message) {
-			throw std::invalid_argument("A message was sent to looper server, which is invalid.");
+	void broadcastLoopVolume(int loopIndex, float volume) {
+		for (auto& [key, entry] : *sharedMap) {
+			entry.volume[loopIndex] = volume;
+			entry.hasUpdate = key != this;
 		}
-	};
-
-	juce::InterprocessConnection* createConnectionObject() override {
-		clients.push_back(std::make_unique<ServerConnection>());
-		return clients.back().get();
 	}
 
 private:
-	const juce::String SERVER_ADDRESS = "localhost";
-	const int SERVER_PORT = 4444;
+	const char* MEM_NAME = "LOOPER_MEM";
 
-	bool isServer = false;
-	bool shouldBecomeServer = false;
-
-	std::vector<std::unique_ptr<juce::InterprocessConnection>> clients;
 	MessageListener* listener;
-
-	void startServer() {
-		isServer = true;
-		beginWaitingForSocket(SERVER_PORT, SERVER_ADDRESS);
-	}
-
-	void broadcastMessage(const juce::MemoryBlock& message) {
-		if (!isServer) return;
-
-		for (auto& client : clients) {
-			client.get()->sendMessage(message);
-		}
-	}
-
-	enum MessageType : char {
-		BECOME_HOST,
-		START_RECORDING,
-		STOP_RECORDING,
-		SET_VOLUME
-	};
-
-	struct BecomeHostMessage {
-		MessageType type = BECOME_HOST;
-	};
-
-	struct StartRecordMessage {
-		MessageType type = START_RECORDING;
-		uint8_t loopIndex;
-
-		StartRecordMessage(uint8_t loopIndex) : loopIndex(loopIndex) {};
-	};
-
-	struct StopRecordMessage {
-		MessageType type = STOP_RECORDING;
-	};
-
-	struct SetVolumeMessage {
-		MessageType type = SET_VOLUME;
-		uint8_t loopIndex;
-		float volume;
-
-		SetVolumeMessage(uint8_t loopIndex, float volume) : loopIndex(loopIndex), volume(volume) {};
-	};
+	SharedMap* sharedMap;
+	bip::managed_shared_memory shm;
 };
