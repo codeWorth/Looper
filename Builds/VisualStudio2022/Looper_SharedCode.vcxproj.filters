@@ -5816,6 +5816,12 @@
     <ClInclude Include="..\..\Source\VerticalMeter.h">
       <Filter>Looper\Source</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\Source\HeadphonesButton.h">
+      <Filter>Looper\Source</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Source\LoopSyncer.h">
+      <Filter>Looper\Source</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\..\..\JUCE\JUCE\modules\juce_audio_devices\native\oboe\src\common\README.md">

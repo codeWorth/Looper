@@ -13,6 +13,7 @@
 
 #include "DecibelSlider.h"
 #include "VerticalMeter.h"
+#include "HeadphonesButton.h"
 
 //==============================================================================
 /**
@@ -42,6 +43,7 @@ private:
     void drawRecording();
     void drawBeat();
     void drawMeters();
+    void clearMonitoring();
 
     LooperAudioProcessor& audioProcessor;
 
@@ -49,11 +51,14 @@ private:
     DecibelSlider volumeSliders[nLoops];
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> volumeSliderAttachments[nLoops];
     VerticalMeter meters[nLoops];
+    std::unique_ptr<HeadphonesButton> monitorButtons[nLoops];
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> monitorButtonAttachments[nLoops];
 
     juce::Label beatIndicators[loopLenInBeats];
 
     int prevRecording = -1;
     int prevBeat = -1;
+    int prevMonitoring = -1;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LooperAudioProcessorEditor)
 };

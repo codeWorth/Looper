@@ -200,6 +200,14 @@ void LooperAudioProcessor::doLooping(juce::AudioBuffer<float>& buffer, juce::Opt
         float monoRMS = (calculateRMS(loopsL[i], samples, nSamples) + calculateRMS(loopsR[i], samples, nSamples)) / 2.f;
         setRMS(i, monoRMS);
     }
+
+    if (monitorIndex != -1 && buffer.getNumChannels() > 2) {
+        loopsL[monitorIndex].readBuffer(tempBuffer1, samples, nSamples);
+        std::memcpy(buffer.getWritePointer(2), tempBuffer1, nSamples * sizeof(float));
+
+        loopsR[monitorIndex].readBuffer(tempBuffer1, samples, nSamples);
+        std::memcpy(buffer.getWritePointer(3), tempBuffer1, nSamples * sizeof(float));
+    }
 }
 
 void LooperAudioProcessor::readWriteLoops(Loop<float> loops[], CopyLoop<float>& tempLoop, size_t currentSample, const float* readBuffer, float* outBuffer) {
@@ -292,9 +300,17 @@ juce::AudioProcessorValueTreeState::ParameterLayout LooperAudioProcessor::create
 
     for (int i = 0; i < nLoops; i++) {
         const juce::String number(i + 1);
-
         params.push_back(std::make_unique<juce::AudioParameterBool>("LOOP" + number, "Loop" + number, false));
+    }
+
+    for (int i = 0; i < nLoops; i++) {
+        const juce::String number(i + 1);
         params.push_back(std::make_unique<juce::AudioParameterFloat>("VOLUME" + number, "Volume" + number, minLoopDb, 0.f, 0.f));
+    }
+
+    for (int i = 0; i < nLoops; i++) {
+        const juce::String number(i + 1);
+        params.push_back(std::make_unique<juce::AudioParameterBool>("MONITOR" + number, "Monitor" + number, false));
     }
 
     return { params.begin(), params.end() };
@@ -309,6 +325,9 @@ void LooperAudioProcessor::setupParameterListeners() {
 
         listeners.push_back(std::make_unique<VolumeListener>(loopVolumes[i], i, *this));
         valueTree.getParameter("VOLUME" + number)->addListener(listeners.back().get());
+
+        listeners.push_back(std::make_unique<ToggleButtonListener>(i, *this));
+        valueTree.getParameter("MONITOR" + number)->addListener(listeners.back().get());
     }
 }
 

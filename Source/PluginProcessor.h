@@ -67,6 +67,7 @@ public:
 
     int recordingIndex = -1;
     int beat = -1;
+    int monitorIndex = -1;
     float getRMS(int loopIndex) const;
 
 private:
@@ -133,6 +134,26 @@ private:
 
             volume = newValue;
             looper.loopSyncer.broadcastLoopVolume(loopIndex, volume);
+        }
+
+        void parameterGestureChanged(int parameterIndex, bool gestureIsStarting) override {}
+    };
+
+    struct ToggleButtonListener : juce::AudioProcessorParameter::Listener {
+
+        ToggleButtonListener(int loopIndex, LooperAudioProcessor& looper) :
+            loopIndex(loopIndex), looper(looper) {};
+        ~ToggleButtonListener() {};
+
+        const int loopIndex;
+        LooperAudioProcessor& looper;
+
+        void parameterValueChanged(int parameterIndex, float newValue) override {
+            if (newValue > 0.5f) {
+                looper.monitorIndex = loopIndex;
+            } else if (looper.monitorIndex == loopIndex) {
+                looper.monitorIndex = -1;
+            }
         }
 
         void parameterGestureChanged(int parameterIndex, bool gestureIsStarting) override {}

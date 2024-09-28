@@ -9,22 +9,34 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
+
 //==============================================================================
 LooperAudioProcessorEditor::LooperAudioProcessorEditor (LooperAudioProcessor& p)
     : AudioProcessorEditor (&p), audioProcessor (p) {
 
+    using namespace juce;
+
     for (int i = 0; i < nLoops; i++) {
-        setupSlider(volumeSliders[i], volumeSliderAttachments[i], juce::String(i + 1), labels[i]);
+        setupSlider(volumeSliders[i], volumeSliderAttachments[i], String(i + 1), labels[i]);
         addAndMakeVisible(meters[i]);
+
+        monitorButtons[i] = std::make_unique<HeadphonesButton>("MONITOR" + String(i + 1));
+        addAndMakeVisible(monitorButtons[i].get());
+        monitorButtonAttachments[i] = std::make_unique<AudioProcessorValueTreeState::ButtonAttachment>(
+            audioProcessor.valueTree,
+            "MONITOR" + String(i + 1),
+            *monitorButtons[i].get()
+        );
     }
 
     for (int i = 0; i < loopLenInBeats; i++) {
         beatIndicators[i].setText("", juce::dontSendNotification);
-        beatIndicators[i].setColour(juce::Label::outlineColourId, juce::Colours::whitesmoke);
+        beatIndicators[i].setColour(Label::outlineColourId, Colours::whitesmoke);
         addAndMakeVisible(beatIndicators[i]);
     }
 
     startTimerHz(30);
+
 
     setSize((nLoops-1)*120 + 100 + 40, 410);
 }
@@ -43,7 +55,9 @@ void LooperAudioProcessorEditor::resized() {
         volumeSliders[i].setBounds(5 + 120 * i, 70, 100, 200);
         labels[i].setBounds(40 + 120 * i, 20, 60, 40);
         meters[i].setBounds(80 + 120 * i, 95, 15, 135);
+        monitorButtons[i].get()->setBounds(75 + 120 * i, 66, 25, 25);
     }
+
 
     int indSize = (getWidth() - 40) / loopLenInBeats;
     for (int i = 0; i < loopLenInBeats; i++) {
@@ -76,6 +90,7 @@ void LooperAudioProcessorEditor::timerCallback() {
     drawRecording();
     drawBeat();
     drawMeters();
+    clearMonitoring();
 }
 
 void LooperAudioProcessorEditor::drawRecording() {
@@ -118,4 +133,18 @@ void LooperAudioProcessorEditor::drawMeters() {
         meter.setLevel(levelInDb);
         meter.repaint();
     }
+}
+
+void LooperAudioProcessorEditor::clearMonitoring() {
+    if (prevMonitoring == audioProcessor.monitorIndex || audioProcessor.monitorIndex == -1 || prevMonitoring == -1) {
+        prevMonitoring = audioProcessor.monitorIndex;
+        return;
+    }
+
+    auto& prevButton = *monitorButtons[prevMonitoring].get();
+    if (prevButton.getToggleState()) {
+        prevButton.setToggleState(false, juce::NotificationType::dontSendNotification);
+    }
+
+    prevMonitoring = audioProcessor.monitorIndex;
 }
