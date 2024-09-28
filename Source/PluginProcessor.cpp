@@ -18,7 +18,8 @@ LooperAudioProcessor::LooperAudioProcessor()
                       #if ! JucePlugin_IsSynth
                        .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
                       #endif
-                       .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
+                        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
+                        .withOutput ("Monitor", juce::AudioChannelSet::stereo(), true)
                      #endif
                        ), 
     valueTree(*this, nullptr, "Parameters", createParameters()),
@@ -135,6 +136,10 @@ void LooperAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     }
 
     midiMessages.clear();
+    if (buffer.getNumChannels() > 2) {
+        std::fill_n(buffer.getWritePointer(2), buffer.getNumSamples(), 0.f);
+        std::fill_n(buffer.getWritePointer(3), buffer.getNumSamples(), 0.f);
+    }
 
     auto playhead = getPlayHead();
     if (playhead == nullptr) {
@@ -148,7 +153,11 @@ void LooperAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     loopSyncer.handleUpdates();
 
     if (!playing) {
-        for (int i = 0; i < nLoops; i++) loopDown[i] = false;
+        for (int i = 0; i < nLoops; i++) {
+            loopDown[i] = false;
+            setRMS(i, 0);
+        }
+
         recordingIndex = -1;
         beat = -1;
         return;
@@ -186,6 +195,11 @@ void LooperAudioProcessor::doLooping(juce::AudioBuffer<float>& buffer, juce::Opt
 
     readWriteLoops(loopsR, nextLoopR, samples, buffer.getReadPointer(1), tempBuffer1);
     std::memcpy(buffer.getWritePointer(1), tempBuffer1, nSamples * sizeof(float));
+
+    for (int i = 0; i < nLoops; i++) {
+        float monoRMS = (calculateRMS(loopsL[i], samples, nSamples) + calculateRMS(loopsR[i], samples, nSamples)) / 2.f;
+        setRMS(i, monoRMS);
+    }
 }
 
 void LooperAudioProcessor::readWriteLoops(Loop<float> loops[], CopyLoop<float>& tempLoop, size_t currentSample, const float* readBuffer, float* outBuffer) {
@@ -194,18 +208,28 @@ void LooperAudioProcessor::readWriteLoops(Loop<float> loops[], CopyLoop<float>& 
     for (int j = 0; j < nLoops; j++) {
         if (recordingIndex == j) {
             tempLoop.writeBuffer(readBuffer, currentSample, nSamples);
-            
         } else {
             loops[j].readBuffer(tempBuffer2, currentSample, nSamples);
-        }
 
-        float loopVal = loopVolumes[j];
-        float decibles = (loopVal - 1) * -minLoopDb;
-        float gain = juce::Decibels::decibelsToGain(decibles, minLoopDb);
-        for (int i = 0; i < nSamples; i++) {
-            outBuffer[i] += gain * tempBuffer2[i];
+            float loopVal = loopVolumes[j];
+            float decibles = (loopVal - 1) * -minLoopDb;
+            float gain = juce::Decibels::decibelsToGain(decibles, minLoopDb);
+            for (int i = 0; i < nSamples; i++) {
+                outBuffer[i] += gain * tempBuffer2[i];
+            }
         }
     }    
+}
+
+float LooperAudioProcessor::calculateRMS(const Loop<float>& loop, size_t currentSample, int nSamples) {
+    loop.readBuffer(tempBuffer1, currentSample, nSamples);
+    float meanSquared = 0.f;
+    for (int i = 0; i < nSamples; i++) {
+        meanSquared += tempBuffer1[i] * tempBuffer1[i];
+    }
+    meanSquared /= static_cast<float>(nSamples);
+
+    return std::sqrt(meanSquared);
 }
 
 void LooperAudioProcessor::setupLoops(size_t samplesPerBeat) {
@@ -231,14 +255,15 @@ juce::AudioProcessorEditor* LooperAudioProcessor::createEditor() {
 
 //==============================================================================
 void LooperAudioProcessor::getStateInformation (juce::MemoryBlock& destData) {
-    // You should use this method to store your parameters in the memory block.
-    // You could do that either as raw data, or use the XML or ValueTree classes
-    // as intermediaries to make it easy to save and load complex data.
+    using namespace juce;
+    MemoryOutputStream stream;
+    valueTree.copyState().writeToStream(stream);
+    destData.replaceAll(stream.getData(), stream.getDataSize());
 }
 
 void LooperAudioProcessor::setStateInformation (const void* data, int sizeInBytes) {
-    // You should use this method to restore your parameters from this memory block,
-    // whose contents will have been created by the getStateInformation() call.
+    using namespace juce;
+    valueTree.replaceState(ValueTree::readFromData(data, sizeInBytes));
 }
 
 //==============================================================================
@@ -295,4 +320,12 @@ void LooperAudioProcessor::setupTempBuffers(int len) {
     std::fill_n(tempBuffer1, nSamples, 0.f);
     tempBuffer2 = new float[nSamples];
     std::fill_n(tempBuffer2, nSamples, 0.f);
+}
+
+float LooperAudioProcessor::getRMS(int loopIndex) const {
+    return loopRMSs[loopIndex];
+}
+
+void LooperAudioProcessor::setRMS(int loopIndex, float value) {
+    loopRMSs[loopIndex] = value;
 }

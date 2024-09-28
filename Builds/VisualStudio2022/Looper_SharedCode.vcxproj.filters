@@ -5813,6 +5813,9 @@
     <ClInclude Include="..\..\JuceLibraryCode\JucePluginDefines.h">
       <Filter>JUCE Library Code</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\Source\VerticalMeter.h">
+      <Filter>Looper\Source</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\..\..\JUCE\JUCE\modules\juce_audio_devices\native\oboe\src\common\README.md">

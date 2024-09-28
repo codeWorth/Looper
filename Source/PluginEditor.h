@@ -12,6 +12,7 @@
 #include "PluginProcessor.h"
 
 #include "DecibelSlider.h"
+#include "VerticalMeter.h"
 
 //==============================================================================
 /**
@@ -40,12 +41,14 @@ private:
 
     void drawRecording();
     void drawBeat();
+    void drawMeters();
 
     LooperAudioProcessor& audioProcessor;
 
     juce::Label labels[nLoops];
     DecibelSlider volumeSliders[nLoops];
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> volumeSliderAttachments[nLoops];
+    VerticalMeter meters[nLoops];
 
     juce::Label beatIndicators[loopLenInBeats];
 

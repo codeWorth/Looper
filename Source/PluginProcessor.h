@@ -67,16 +67,20 @@ public:
 
     int recordingIndex = -1;
     int beat = -1;
+    float getRMS(int loopIndex) const;
 
 private:
     juce::AudioProcessorValueTreeState::ParameterLayout createParameters();
     void setupParameterListeners();
     void setupTempBuffers(int len);
     void readWriteLoops(Loop<float> loops[], CopyLoop<float>& tempLoop, size_t currentSample, const float* readBuffer, float* outBuffer);
+    float calculateRMS(const Loop<float>& loop, size_t currentSample, int nSamples);
     void setupLoops(size_t samplesPerBeat);
+    void setRMS(int loopIndex, float value);
     
     bool loopDown[nLoops];
     float loopVolumes[nLoops];
+    float loopRMSs[nLoops];
 
     size_t samplesPerBeat = 0;
     Loop<float> loopsL[nLoops];

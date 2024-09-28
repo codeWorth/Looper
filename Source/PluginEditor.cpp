@@ -15,6 +15,7 @@ LooperAudioProcessorEditor::LooperAudioProcessorEditor (LooperAudioProcessor& p)
 
     for (int i = 0; i < nLoops; i++) {
         setupSlider(volumeSliders[i], volumeSliderAttachments[i], juce::String(i + 1), labels[i]);
+        addAndMakeVisible(meters[i]);
     }
 
     for (int i = 0; i < loopLenInBeats; i++) {
@@ -39,8 +40,9 @@ void LooperAudioProcessorEditor::paint (juce::Graphics& g) {
 
 void LooperAudioProcessorEditor::resized() {
     for (int i = 0; i < nLoops; i++) {
-        volumeSliders[i].setBounds(20 + 120 * i, 70, 100, 200);
+        volumeSliders[i].setBounds(5 + 120 * i, 70, 100, 200);
         labels[i].setBounds(40 + 120 * i, 20, 60, 40);
+        meters[i].setBounds(80 + 120 * i, 95, 15, 135);
     }
 
     int indSize = (getWidth() - 40) / loopLenInBeats;
@@ -73,6 +75,7 @@ void LooperAudioProcessorEditor::setupSlider(
 void LooperAudioProcessorEditor::timerCallback() {
     drawRecording();
     drawBeat();
+    drawMeters();
 }
 
 void LooperAudioProcessorEditor::drawRecording() {
@@ -103,4 +106,16 @@ void LooperAudioProcessorEditor::drawBeat() {
     }
 
     prevBeat = audioProcessor.beat;
+}
+
+void LooperAudioProcessorEditor::drawMeters() {
+    for (int i = 0; i < nLoops; i++) {
+        VerticalMeter& meter = meters[i];
+        float rms = audioProcessor.getRMS(i);
+        float levelInDb = juce::Decibels::gainToDecibels(rms, meter.MIN_LEVEL);
+        if (levelInDb < meter.MIN_LEVEL + 1) levelInDb = meter.MIN_LEVEL;
+
+        meter.setLevel(levelInDb);
+        meter.repaint();
+    }
 }

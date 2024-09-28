@@ -3395,6 +3395,7 @@
     <ClInclude Include="..\..\..\..\JUCE\JUCE\modules\juce_gui_extra\juce_gui_extra.h" />
     <ClInclude Include="..\..\JuceLibraryCode\JuceHeader.h" />
     <ClInclude Include="..\..\JuceLibraryCode\JucePluginDefines.h" />
+    <ClInclude Include="..\..\Source\VerticalMeter.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\..\..\JUCE\JUCE\modules\juce_audio_devices\native\oboe\src\common\README.md" />
