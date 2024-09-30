@@ -143,7 +143,7 @@ void LooperAudioProcessorEditor::clearMonitoring() {
 
     auto& prevButton = *monitorButtons[prevMonitoring].get();
     if (prevButton.getToggleState()) {
-        prevButton.setToggleState(false, juce::NotificationType::dontSendNotification);
+        prevButton.setToggleState(false, juce::NotificationType::sendNotification);
     }
 
     prevMonitoring = audioProcessor.monitorIndex;

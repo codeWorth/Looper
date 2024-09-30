@@ -5813,12 +5813,6 @@
     <ClInclude Include="..\..\JuceLibraryCode\JucePluginDefines.h">
       <Filter>JUCE Library Code</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\Source\VerticalMeter.h">
-      <Filter>Looper\Source</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\Source\HeadphonesButton.h">
-      <Filter>Looper\Source</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\Source\LoopSyncer.h">
       <Filter>Looper\Source</Filter>
     </ClInclude>

@@ -2433,7 +2433,6 @@
     <ClCompile Include="..\..\JuceLibraryCode\include_juce_gui_extra.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\Source\HeadphonesButton.h" />
     <ClInclude Include="..\..\Source\LoopSyncer.h" />
     <ClInclude Include="..\..\Source\PluginProcessor.h" />
     <ClInclude Include="..\..\Source\PluginEditor.h" />
@@ -3397,7 +3396,6 @@
     <ClInclude Include="..\..\..\..\JUCE\JUCE\modules\juce_gui_extra\juce_gui_extra.h" />
     <ClInclude Include="..\..\JuceLibraryCode\JuceHeader.h" />
     <ClInclude Include="..\..\JuceLibraryCode\JucePluginDefines.h" />
-    <ClInclude Include="..\..\Source\VerticalMeter.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\..\..\JUCE\JUCE\modules\juce_audio_devices\native\oboe\src\common\README.md" />
