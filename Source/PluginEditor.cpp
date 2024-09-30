@@ -17,20 +17,31 @@ LooperAudioProcessorEditor::LooperAudioProcessorEditor (LooperAudioProcessor& p)
     using namespace juce;
 
     for (int i = 0; i < nLoops; i++) {
-        setupSlider(volumeSliders[i], volumeSliderAttachments[i], String(i + 1), labels[i]);
-        addAndMakeVisible(meters[i]);
-
-        monitorButtons[i] = std::make_unique<HeadphonesButton>("MONITOR" + String(i + 1));
-        addAndMakeVisible(monitorButtons[i].get());
-        monitorButtonAttachments[i] = std::make_unique<AudioProcessorValueTreeState::ButtonAttachment>(
-            audioProcessor.valueTree,
-            "MONITOR" + String(i + 1),
-            *monitorButtons[i].get()
+        setupSlider(
+            volumeSliders[i], monitorButtons[i], 
+            volumeSliderAttachments[i], monitorButtonAttachments[i], 
+            String(i + 1), labels[i]
         );
+        addAndMakeVisible(meters[i]);
     }
 
+    addAndMakeVisible(inputMeter);
+    muteInput.setButtonText("M");
+    muteInput.setClickingTogglesState(true);
+    muteInput.setColour(TextButton::buttonOnColourId, Colours::palevioletred);
+    addAndMakeVisible(muteInput);
+    inputLabel.setJustificationType(Justification::centred);
+    inputLabel.setText("Input", dontSendNotification);
+    addAndMakeVisible(inputLabel);
+
+    muteInputAttachment = std::make_unique<AudioProcessorValueTreeState::ButtonAttachment>(
+        audioProcessor.valueTree,
+        "MUTEINPUT",
+        muteInput
+    );
+
     for (int i = 0; i < loopLenInBeats; i++) {
-        beatIndicators[i].setText("", juce::dontSendNotification);
+        beatIndicators[i].setText("", dontSendNotification);
         beatIndicators[i].setColour(Label::outlineColourId, Colours::whitesmoke);
         addAndMakeVisible(beatIndicators[i]);
     }
@@ -38,7 +49,7 @@ LooperAudioProcessorEditor::LooperAudioProcessorEditor (LooperAudioProcessor& p)
     startTimerHz(30);
 
 
-    setSize((nLoops-1)*120 + 100 + 40, 410);
+    setSize((nLoops-1)*120 + 100 + 40 + loopsX, 410);
 }
 
 LooperAudioProcessorEditor::~LooperAudioProcessorEditor() {
@@ -52,12 +63,15 @@ void LooperAudioProcessorEditor::paint (juce::Graphics& g) {
 
 void LooperAudioProcessorEditor::resized() {
     for (int i = 0; i < nLoops; i++) {
-        volumeSliders[i].setBounds(5 + 120 * i, 70, 100, 200);
-        labels[i].setBounds(40 + 120 * i, 20, 60, 40);
-        meters[i].setBounds(80 + 120 * i, 95, 15, 135);
-        monitorButtons[i].get()->setBounds(75 + 120 * i, 66, 25, 25);
+        volumeSliders[i].setBounds(loopsX + 5 + 120 * i, 70, 100, 200);
+        labels[i].setBounds(loopsX + 40 + 120 * i, 20, 60, 40);
+        meters[i].setBounds(loopsX + 80 + 120 * i, 95, 15, 135);
+        monitorButtons[i].get()->setBounds(loopsX + 75 + 120 * i, 66, 25, 25);
     }
 
+    inputLabel.setBounds(10, 20, 60, 40);
+    inputMeter.setBounds(32, 95, 15, 135);
+    muteInput.setBounds(27, 66, 25, 25);
 
     int indSize = (getWidth() - 40) / loopLenInBeats;
     for (int i = 0; i < loopLenInBeats; i++) {
@@ -67,22 +81,34 @@ void LooperAudioProcessorEditor::resized() {
 
 void LooperAudioProcessorEditor::setupSlider(
     DecibelSlider& slider,
+    std::unique_ptr<HeadphonesButton>& monitorButton,
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>& attachment, 
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>& monitorAttachment,
     const juce::String& paramNumber,
     juce::Label& label
 ) {
-    slider.setSliderStyle(juce::Slider::SliderStyle::LinearVertical);
-    slider.setTextBoxStyle(juce::Slider::TextBoxBelow, true, 60, 30);
+    using namespace juce;
+
+    slider.setSliderStyle(Slider::SliderStyle::LinearVertical);
+    slider.setTextBoxStyle(Slider::TextBoxBelow, true, 60, 30);
     addAndMakeVisible(slider);
 
-    label.setText("Loop " + paramNumber, juce::dontSendNotification);
-    label.setJustificationType(juce::Justification::centred);
+    label.setText("Loop " + paramNumber, dontSendNotification);
+    label.setJustificationType(Justification::centred);
     addAndMakeVisible(label);
 
-    attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+    attachment = std::make_unique<AudioProcessorValueTreeState::SliderAttachment>(
         audioProcessor.valueTree,
         "VOLUME" + paramNumber,
         slider
+    );
+
+    monitorButton = std::make_unique<HeadphonesButton>("MONITOR" + paramNumber);
+    addAndMakeVisible(monitorButton.get());
+    monitorAttachment = std::make_unique<AudioProcessorValueTreeState::ButtonAttachment>(
+        audioProcessor.valueTree,
+        "MONITOR" + paramNumber,
+        *monitorButton.get()
     );
 }
 
@@ -133,6 +159,14 @@ void LooperAudioProcessorEditor::drawMeters() {
         meter.setLevel(levelInDb);
         meter.repaint();
     }
+
+    VerticalMeter& meter = inputMeter;
+    float rms = audioProcessor.getInputRMS();
+    float levelInDb = juce::Decibels::gainToDecibels(rms, meter.MIN_LEVEL);
+    if (levelInDb < meter.MIN_LEVEL + 1) levelInDb = meter.MIN_LEVEL;
+
+    meter.setLevel(levelInDb);
+    meter.repaint();
 }
 
 void LooperAudioProcessorEditor::clearMonitoring() {

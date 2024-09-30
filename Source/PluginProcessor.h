@@ -12,6 +12,7 @@
 #include "CopyLoop.h"
 #include "LoopSyncer.h"
 #include "Constants.h"
+#include "BufferStack.h"
 
 //==============================================================================
 /**
@@ -69,6 +70,7 @@ public:
     int beat = -1;
     int monitorIndex = -1;
     float getRMS(int loopIndex) const;
+    float getInputRMS() const;
 
 private:
     juce::AudioProcessorValueTreeState::ParameterLayout createParameters();
@@ -76,19 +78,21 @@ private:
     void setupTempBuffers(int len);
     void readWriteLoops(Loop<float> loops[], CopyLoop<float>& tempLoop, size_t currentSample, const float* readBuffer, float* outBuffer);
     float calculateRMS(const Loop<float>& loop, size_t currentSample, int nSamples);
+    float calculateRMS(const float* buffer, int nSamples) const;
     void setupLoops(size_t samplesPerBeat);
     void setRMS(int loopIndex, float value);
     
     bool loopDown[nLoops];
     float loopVolumes[nLoops];
     float loopRMSs[nLoops];
+    float inputRMS = 0.f;
+    bool muteInput = false;
 
     size_t samplesPerBeat = 0;
     Loop<float> loopsL[nLoops];
     Loop<float> loopsR[nLoops];
     size_t readIndex[nLoops];
-    float* tempBuffer1;
-    float* tempBuffer2;
+    BufferStack<float> bufferStack;
     int nSamples;
 
     CopyLoop<float> nextLoopL;
@@ -154,6 +158,20 @@ private:
             } else if (looper.monitorIndex == loopIndex) {
                 looper.monitorIndex = -1;
             }
+        }
+
+        void parameterGestureChanged(int parameterIndex, bool gestureIsStarting) override {}
+    };
+
+    struct MuteInputListener : juce::AudioProcessorParameter::Listener {
+
+        MuteInputListener(LooperAudioProcessor& looper) : looper(looper) {};
+        ~MuteInputListener() {};
+
+        LooperAudioProcessor& looper;
+
+        void parameterValueChanged(int parameterIndex, float newValue) override {
+            looper.muteInput = newValue > 0.5f;
         }
 
         void parameterGestureChanged(int parameterIndex, bool gestureIsStarting) override {}

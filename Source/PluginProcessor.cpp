@@ -23,13 +23,9 @@ LooperAudioProcessor::LooperAudioProcessor()
                      #endif
                        ), 
     valueTree(*this, nullptr, "Parameters", createParameters()),
-    loopSyncer(this)
+    loopSyncer(this), bufferStack(4), nSamples(1024)
 #endif
 {
-    nSamples = 1024;
-    tempBuffer1 = new float[nSamples];
-    tempBuffer2 = new float[nSamples];
-
     for (int i = 0; i < nLoops; i++) {
         loopDown[i] = false;
         loopVolumes[i] = 1.f;
@@ -38,10 +34,7 @@ LooperAudioProcessor::LooperAudioProcessor()
     setupParameterListeners();
 }
 
-LooperAudioProcessor::~LooperAudioProcessor() {
-    delete[] tempBuffer1;
-    delete[] tempBuffer2;
-}
+LooperAudioProcessor::~LooperAudioProcessor() {}
 
 //==============================================================================
 const juce::String LooperAudioProcessor::getName() const {
@@ -131,9 +124,7 @@ bool LooperAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) c
 #endif
 
 void LooperAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages) {
-    if (nSamples != buffer.getNumSamples()) {
-        setupTempBuffers(buffer.getNumSamples());
-    }
+    setupTempBuffers(buffer.getNumSamples());
 
     midiMessages.clear();
     if (buffer.getNumChannels() > 2) {
@@ -151,6 +142,8 @@ void LooperAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     playing = info->getIsPlaying();
 
     loopSyncer.handleUpdates();
+
+    inputRMS = (calculateRMS(buffer.getReadPointer(0), nSamples) + calculateRMS(buffer.getReadPointer(1), nSamples)) / 2.f;
 
     if (!playing) {
         for (int i = 0; i < nLoops; i++) {
@@ -189,12 +182,13 @@ void LooperAudioProcessor::doLooping(juce::AudioBuffer<float>& buffer, juce::Opt
 
     auto samples = info->getTimeInSamples().orFallback(0);
     beat = (samples / samplesPerBeat) % loopLenInBeats;
+    BufferStack<float>::Buffer tempBuffer(bufferStack);
 
-    readWriteLoops(loopsL, nextLoopL, samples, buffer.getReadPointer(0), tempBuffer1);
-    std::memcpy(buffer.getWritePointer(0), tempBuffer1, nSamples * sizeof(float));
+    readWriteLoops(loopsL, nextLoopL, samples, buffer.getReadPointer(0), tempBuffer.get());
+    std::memcpy(buffer.getWritePointer(0), tempBuffer.get(), nSamples * sizeof(float));
 
-    readWriteLoops(loopsR, nextLoopR, samples, buffer.getReadPointer(1), tempBuffer1);
-    std::memcpy(buffer.getWritePointer(1), tempBuffer1, nSamples * sizeof(float));
+    readWriteLoops(loopsR, nextLoopR, samples, buffer.getReadPointer(1), tempBuffer.get());
+    std::memcpy(buffer.getWritePointer(1), tempBuffer.get(), nSamples * sizeof(float));
 
     for (int i = 0; i < nLoops; i++) {
         float monoRMS = (calculateRMS(loopsL[i], samples, nSamples) + calculateRMS(loopsR[i], samples, nSamples)) / 2.f;
@@ -202,38 +196,50 @@ void LooperAudioProcessor::doLooping(juce::AudioBuffer<float>& buffer, juce::Opt
     }
 
     if (monitorIndex != -1 && buffer.getNumChannels() > 2) {
-        loopsL[monitorIndex].readBuffer(tempBuffer1, samples, nSamples);
-        std::memcpy(buffer.getWritePointer(2), tempBuffer1, nSamples * sizeof(float));
+        loopsL[monitorIndex].readBuffer(tempBuffer.get(), samples, nSamples);
+        std::memcpy(buffer.getWritePointer(2), tempBuffer.get(), nSamples * sizeof(float));
 
-        loopsR[monitorIndex].readBuffer(tempBuffer1, samples, nSamples);
-        std::memcpy(buffer.getWritePointer(3), tempBuffer1, nSamples * sizeof(float));
+        loopsR[monitorIndex].readBuffer(tempBuffer.get(), samples, nSamples);
+        std::memcpy(buffer.getWritePointer(3), tempBuffer.get(), nSamples * sizeof(float));
     }
 }
 
 void LooperAudioProcessor::readWriteLoops(Loop<float> loops[], CopyLoop<float>& tempLoop, size_t currentSample, const float* readBuffer, float* outBuffer) {
-    std::memcpy(outBuffer, readBuffer, nSamples * sizeof(float));
+    if (muteInput) {
+        std::fill_n(outBuffer, nSamples, 0.f);
+    } else {
+        std::memcpy(outBuffer, readBuffer, nSamples * sizeof(float));
+    }
+
+    BufferStack<float>::Buffer tempBuffer(bufferStack);
     
     for (int j = 0; j < nLoops; j++) {
         if (recordingIndex == j) {
             tempLoop.writeBuffer(readBuffer, currentSample, nSamples);
+            std::memcpy(tempBuffer.get(), readBuffer, nSamples * sizeof(float));
         } else {
-            loops[j].readBuffer(tempBuffer2, currentSample, nSamples);
+            loops[j].readBuffer(tempBuffer.get(), currentSample, nSamples);
+        }
 
-            float loopVal = loopVolumes[j];
-            float decibles = (loopVal - 1) * -minLoopDb;
-            float gain = juce::Decibels::decibelsToGain(decibles, minLoopDb);
-            for (int i = 0; i < nSamples; i++) {
-                outBuffer[i] += gain * tempBuffer2[i];
-            }
+        float loopVal = loopVolumes[j];
+        float decibles = (loopVal - 1) * -minLoopDb;
+        float gain = juce::Decibels::decibelsToGain(decibles, minLoopDb);
+        for (int i = 0; i < nSamples; i++) {
+            outBuffer[i] += gain * tempBuffer.get()[i];
         }
     }    
 }
 
 float LooperAudioProcessor::calculateRMS(const Loop<float>& loop, size_t currentSample, int nSamples) {
-    loop.readBuffer(tempBuffer1, currentSample, nSamples);
+    BufferStack<float>::Buffer tempBuffer(bufferStack);
+    loop.readBuffer(tempBuffer.get(), currentSample, nSamples);
+    return calculateRMS(tempBuffer.get(), nSamples);
+}
+
+float LooperAudioProcessor::calculateRMS(const float* buffer, int nSamples) const {
     float meanSquared = 0.f;
     for (int i = 0; i < nSamples; i++) {
-        meanSquared += tempBuffer1[i] * tempBuffer1[i];
+        meanSquared += buffer[i] * buffer[i];
     }
     meanSquared /= static_cast<float>(nSamples);
 
@@ -313,6 +319,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout LooperAudioProcessor::create
         params.push_back(std::make_unique<juce::AudioParameterBool>("MONITOR" + number, "Monitor" + number, false));
     }
 
+    params.push_back(std::make_unique<juce::AudioParameterBool>("MUTEINPUT", "muteinput", false));
+
     return { params.begin(), params.end() };
 }
 
@@ -329,16 +337,14 @@ void LooperAudioProcessor::setupParameterListeners() {
         listeners.push_back(std::make_unique<ToggleButtonListener>(i, *this));
         valueTree.getParameter("MONITOR" + number)->addListener(listeners.back().get());
     }
+
+    listeners.push_back(std::make_unique<MuteInputListener>(*this));
+    valueTree.getParameter("MUTEINPUT")->addListener(listeners.back().get());
 }
 
 void LooperAudioProcessor::setupTempBuffers(int len) {
-    delete[] tempBuffer1;
-    delete[] tempBuffer2;
     nSamples = len;
-    tempBuffer1 = new float[nSamples];
-    std::fill_n(tempBuffer1, nSamples, 0.f);
-    tempBuffer2 = new float[nSamples];
-    std::fill_n(tempBuffer2, nSamples, 0.f);
+    bufferStack.setupBuffersIfNeeded(len, 0.f);
 }
 
 float LooperAudioProcessor::getRMS(int loopIndex) const {
@@ -347,4 +353,8 @@ float LooperAudioProcessor::getRMS(int loopIndex) const {
 
 void LooperAudioProcessor::setRMS(int loopIndex, float value) {
     loopRMSs[loopIndex] = value;
+}
+
+float LooperAudioProcessor::getInputRMS() const {
+    return inputRMS;
 }

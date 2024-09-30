@@ -35,7 +35,9 @@ public:
 private:
     void setupSlider(
         DecibelSlider& slider, 
+        std::unique_ptr<HeadphonesButton>& monitorButton,
         std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>& attachment, 
+        std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>& monitorAttachment,
         const juce::String& paramNumber,
         juce::Label& label
     );
@@ -46,6 +48,11 @@ private:
     void clearMonitoring();
 
     LooperAudioProcessor& audioProcessor;
+
+    VerticalMeter inputMeter;
+    juce::TextButton muteInput;
+    juce::Label inputLabel;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> muteInputAttachment;
 
     juce::Label labels[nLoops];
     DecibelSlider volumeSliders[nLoops];
@@ -59,6 +66,7 @@ private:
     int prevRecording = -1;
     int prevBeat = -1;
     int prevMonitoring = -1;
+    const float loopsX = 50;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (LooperAudioProcessorEditor)
 };
